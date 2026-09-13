@@ -12,6 +12,7 @@ import (
 	"github.com/voocel/agentcore/llm"
 	"github.com/voocel/ainovel-cli/internal/errs"
 	"github.com/voocel/ainovel-cli/internal/llmcontract"
+	"github.com/voocel/ainovel-cli/internal/provider/antigravity"
 )
 
 // FailoverEvent 表示一次显式 provider 切换。
@@ -378,6 +379,19 @@ func createModelFromConfig(providerKey, model string, pc ProviderConfig, cache m
 	streamIdle, err := pc.StreamIdleTimeoutValue()
 	if err != nil {
 		return nil, fmt.Errorf("provider %s stream_idle_timeout: %w: %w", providerKey, errs.ErrConfig, err)
+	}
+
+	if providerType == "antigravity" {
+		m, err := antigravity.NewModel(model, antigravity.ModelOptions{
+			BaseURL:   pc.BaseURL,
+			ExtraBody: pc.ExtraBody,
+			Extra:     providerExtra,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("provider %s (antigravity): %w: %w", providerKey, errs.ErrProvider, err)
+		}
+		cache[cacheKey] = m
+		return m, nil
 	}
 
 	m, err := llm.NewModel(providerType, model,

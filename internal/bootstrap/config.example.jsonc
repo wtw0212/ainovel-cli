@@ -10,7 +10,7 @@
   "reasoning_effort": "medium",
 
   // Provider 凭证库。key 自定义，用作上面 provider 字段引用的目标。
-  // 已知 provider（openai/anthropic/gemini/openrouter/deepseek/qwen/glm/grok/mimo/ollama/bedrock）
+  // 已知 provider（openai/anthropic/gemini/openrouter/deepseek/qwen/glm/grok/mimo/ollama/bedrock/antigravity）
   // 可省略 type；自定义代理必须显式声明 type 指明 API 协议。
   "providers": {
     "openrouter": {
@@ -38,6 +38,15 @@
     "anthropic": {
       "api_key": "sk-ant-xxx",
       "models": [{ "name": "claude-sonnet-4-6", "json_schema": true }]
+    },
+    "antigravity": {
+      // Google Antigravity (Cloud Code Assist / Google Workspace 逆向调用)
+      // 不需要配置 api_key，通过运行 `ainovel-cli auth login antigravity` 完成 Google OAuth 授权
+      "models": [
+        { "name": "claude-sonnet-4-5-thinking", "context_window": 200000 },
+        { "name": "gemini-2.5-pro", "context_window": 1000000 },
+        { "name": "gemini-2.5-flash", "context_window": 1000000 }
+      ]
     },
     "ollama": {
       // ollama / bedrock / 显式 type 的自定义代理可以省略 api_key

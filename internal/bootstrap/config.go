@@ -148,8 +148,11 @@ func (pc ProviderConfig) StreamIdleTimeoutValue() (time.Duration, error) {
 // 2. 显式指定 Type 的配置视为自定义代理，允许无 key；
 // 3. 其他 provider 默认要求 key，保持对官方托管接口的保守校验。
 func (pc ProviderConfig) RequiresAPIKey(name string) bool {
-	switch name {
-	case "ollama", "bedrock":
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "ollama", "bedrock", "antigravity":
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(pc.Type), "antigravity") {
 		return false
 	}
 	return pc.Type == ""
@@ -160,6 +163,9 @@ func (pc ProviderConfig) RequiresAPIKey(name string) bool {
 func (pc ProviderConfig) ProviderType(name string) (string, error) {
 	if pc.Type != "" {
 		return pc.Type, nil
+	}
+	if strings.EqualFold(strings.TrimSpace(name), "antigravity") {
+		return "antigravity", nil
 	}
 	if llm.IsProviderRegistered(name) {
 		return name, nil

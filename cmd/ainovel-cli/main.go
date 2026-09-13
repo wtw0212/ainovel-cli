@@ -27,9 +27,12 @@ var (
 var headlessMode bool
 
 func main() {
-	// 子命令在常规 flag 解析之前拦截：eval 是离线评测 harness，参数体系独立。
+	// 子命令在常规 flag 解析之前拦截：eval 是离线评测 harness，auth 是鉴权管理，参数体系独立。
 	if len(os.Args) > 1 && os.Args[1] == "eval" {
 		os.Exit(eval.Command(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "auth" {
+		os.Exit(runAuthCommand(os.Args[2:]))
 	}
 
 	opts, args, err := parseCLIOptions(os.Args[1:])

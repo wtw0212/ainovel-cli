@@ -60,6 +60,7 @@ var setupProviders = []setupProvider{
 	{name: "grok", label: "Grok"},
 	{name: "ollama", label: "Ollama", baseURL: "http://localhost:11434/v1", apiKeyOptional: true},
 	{name: "bedrock", label: "Bedrock", apiKeyOptional: true},
+	{name: "antigravity", label: "Google Antigravity", apiKeyOptional: true},
 	{name: "custom", label: "Custom Proxy", needType: true, apiKeyOptional: true},
 }
 
@@ -142,7 +143,13 @@ func RunSetup() (Config, error) {
 	}
 
 	// Step 4: 模型名（必填）
-	modelName, err := runTextInput("[4/4] 模型名称", "例如：gpt-4o / claude-sonnet-4 / gemini-2.5-pro")
+	modelHint := "例如：gpt-4o / claude-sonnet-4 / gemini-2.5-pro"
+	modelDefault := ""
+	if sp.name == "antigravity" {
+		modelHint = "直接回车默认 gemini-3.8-flash，或输入 claude-sonnet-4-5-thinking"
+		modelDefault = "gemini-3.8-flash"
+	}
+	modelName, err := runTextInputWithDefault("[4/4] 模型名称", modelHint, modelDefault)
 	if err != nil {
 		return Config{}, err
 	}
@@ -174,6 +181,10 @@ func RunSetup() (Config, error) {
 		lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("✓"), path)
 	fmt.Fprintf(os.Stderr, "  默认模型：%s\n", modelName)
 	fmt.Fprintln(os.Stderr, "  如需按角色配置不同模型，编辑配置文件即可。")
+	if sp.name == "antigravity" {
+		fmt.Fprintf(os.Stderr, "  提示：请执行 %s 登录您的 Google 账号。\n",
+			lipgloss.NewStyle().Bold(true).Render("ainovel-cli auth login antigravity"))
+	}
 	if rulesDir != "" {
 		fmt.Fprintf(os.Stderr, "  全局写作偏好可放 %s 下的 .md 文件（见其中 README.txt）\n", rulesDir)
 	}
@@ -228,6 +239,7 @@ var apiTypeOptions = []setupProvider{
 	{name: "openai", label: "OpenAI 兼容"},
 	{name: "anthropic", label: "Anthropic 兼容"},
 	{name: "gemini", label: "Gemini 兼容"},
+	{name: "antigravity", label: "Google Antigravity"},
 }
 
 func runTypeSelect() (string, error) {
@@ -248,7 +260,17 @@ func runTypeSelect() (string, error) {
 }
 
 func runTextInput(label, placeholder string) (string, error) {
-	return runTextInputWithDefault(label, placeholder, "")
+	m := setupInputModel{label: label, placeholder: placeholder, allowEmpty: false}
+	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
+	final, err := p.Run()
+	if err != nil {
+		return "", err
+	}
+	result := final.(setupInputModel)
+	if result.cancelled {
+		return "", fmt.Errorf("setup cancelled")
+	}
+	return utils.CleanInputLine(result.value), nil
 }
 
 func runOptionalTextInput(label, placeholder string) (string, error) {
@@ -266,7 +288,7 @@ func runOptionalTextInput(label, placeholder string) (string, error) {
 }
 
 func runTextInputWithDefault(label, placeholder, defaultValue string) (string, error) {
-	m := setupInputModel{label: label, placeholder: placeholder, defaultValue: defaultValue}
+	m := setupInputModel{label: label, placeholder: placeholder, defaultValue: defaultValue, allowEmpty: true}
 	p := tea.NewProgram(m, tea.WithOutput(os.Stderr))
 	final, err := p.Run()
 	if err != nil {

@@ -542,7 +542,26 @@ output/novel/meta/simulation_profile.json
 
 - `openrouter` / `anthropic` / `gemini` / `openai` / `deepseek` / `qwen` / `glm` / `grok` 这类托管接口通常需要填写 `api_key`
 - `ollama` 和 `bedrock` 允许不填 `api_key`；Bedrock 需在 `extra` 中配置 `region`、`access_key_id`、`secret_access_key`（可选 `session_token`）
+- `antigravity`（Google Antigravity）无需 `api_key`，通过执行 `ainovel-cli auth login antigravity` 进行 Google OAuth 登录，支持 `claude-sonnet-4-5-thinking`、`gemini-2.5-pro`、`gemini-2.5-flash` 等模型
 - 显式指定了 `type` 的自定义代理允许不填 `api_key`
+
+例如 Google Antigravity 配置：
+
+```jsonc
+{
+  "provider": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "providers": {
+    "antigravity": {
+      "models": [
+        { "name": "claude-sonnet-4-5-thinking", "context_window": 200000 },
+        { "name": "gemini-2.5-pro", "context_window": 1000000 },
+        { "name": "gemini-2.5-flash", "context_window": 1000000 }
+      ]
+    }
+  }
+}
+```
 
 例如本地 `ollama` 配置：
 
