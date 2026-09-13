@@ -95,8 +95,8 @@ func (m *AntigravityModel) Capabilities() llm.Capabilities {
 		Provider: "google-antigravity",
 		Model:    m.modelName,
 		Structured: llm.StructuredCapabilities{
-			JSONSchema: llm.SupportYes,
-			Strict:     llm.SupportNo, // Google Cloud Code Assist 採用 VALIDATED 模式，不支援 OpenAI 風格嚴格 strict
+			JSONSchema: llm.SupportNo, // 走 prompt contract 模式，確保 Arbiter、Role 各類結構化輸出在所有模型上穩定解析
+			Strict:     llm.SupportNo,
 		},
 	}
 }

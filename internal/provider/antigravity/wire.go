@@ -296,6 +296,12 @@ type StreamResponseChunk struct {
 	UsageMetadata *UsageMetadata `json:"usageMetadata,omitempty"`
 }
 
+type sseEnvelope struct {
+	Response      *StreamResponseChunk `json:"response,omitempty"`
+	Candidates    []Candidate          `json:"candidates,omitempty"`
+	UsageMetadata *UsageMetadata       `json:"usageMetadata,omitempty"`
+}
+
 // Candidate 候選響應。
 type Candidate struct {
 	Content      *CandidateContent `json:"content,omitempty"`
@@ -326,9 +332,15 @@ func ParseSSELine(line string) (*StreamResponseChunk, error) {
 	if jsonText == "" || jsonText == "[DONE]" {
 		return nil, nil
 	}
-	var chunk StreamResponseChunk
-	if err := json.Unmarshal([]byte(jsonText), &chunk); err != nil {
+	var env sseEnvelope
+	if err := json.Unmarshal([]byte(jsonText), &env); err != nil {
 		return nil, fmt.Errorf("unmarshal sse chunk: %w", err)
 	}
-	return &chunk, nil
+	if env.Response != nil {
+		return env.Response, nil
+	}
+	return &StreamResponseChunk{
+		Candidates:    env.Candidates,
+		UsageMetadata: env.UsageMetadata,
+	}, nil
 }

@@ -2,13 +2,16 @@ package antigravity
 
 import (
 	"context"
-	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/voocel/agentcore"
 )
 
 func TestNewModelLazyCredentials(t *testing.T) {
+	restore := SetAuthFilePathForTest(filepath.Join(t.TempDir(), "nonexistent.json"))
+	defer restore()
+
 	// 驗證未提供憑證且檔案不存在時，NewModel 不應出錯崩潰
 	m, err := NewModel("gemini-3.8-flash", ModelOptions{})
 	if err != nil {
@@ -35,8 +38,9 @@ func TestNewModelLazyCredentials(t *testing.T) {
 }
 
 func TestHasCredentials(t *testing.T) {
-	// 憑證檔案不存在時應回傳 false
-	_ = os.Remove(DefaultAuthFilePath())
+	restore := SetAuthFilePathForTest(filepath.Join(t.TempDir(), "nonexistent.json"))
+	defer restore()
+
 	if HasCredentials() {
 		t.Errorf("憑證檔案不存在時 HasCredentials 應為 false")
 	}

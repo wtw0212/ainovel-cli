@@ -38,10 +38,23 @@ type Credentials struct {
 
 var (
 	tokenMu sync.Mutex
+	authFilePathOverride string
 )
+
+// SetAuthFilePathForTest 供單元測試隔離憑證檔案路徑，返回還原函數。
+func SetAuthFilePathForTest(path string) func() {
+	orig := authFilePathOverride
+	authFilePathOverride = path
+	return func() {
+		authFilePathOverride = orig
+	}
+}
 
 // DefaultAuthFilePath 返回 ~/.ainovel/antigravity_auth.json 路徑。
 func DefaultAuthFilePath() string {
+	if authFilePathOverride != "" {
+		return authFilePathOverride
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."

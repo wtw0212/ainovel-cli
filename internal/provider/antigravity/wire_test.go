@@ -203,6 +203,16 @@ func TestParseSSELine(t *testing.T) {
 	if chunk.UsageMetadata.TotalTokenCount != 15 {
 		t.Errorf("usageMetadata 錯誤: %+v", chunk.UsageMetadata)
 	}
+
+	// 解析帶有 response 外層包裝的官方 CCA payload
+	wrappedData := `data: {"response": {"candidates": [{"content": {"role": "model","parts": [{"text": "包裝回答"}]}}],"usageMetadata": {"promptTokenCount": 17,"candidatesTokenCount": 23,"totalTokenCount": 64}}}`
+	chunk, err = ParseSSELine(wrappedData)
+	if err != nil {
+		t.Fatalf("ParseSSELine wrapped 失敗: %v", err)
+	}
+	if chunk == nil || len(chunk.Candidates) != 1 || chunk.Candidates[0].Content.Parts[0].Text != "包裝回答" {
+		t.Fatalf("未正確解析 wrapped response: %+v", chunk)
+	}
 }
 
 func TestAntigravityEnvelopeSerialization(t *testing.T) {
