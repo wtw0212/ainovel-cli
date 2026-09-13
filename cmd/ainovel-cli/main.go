@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/voocel/ainovel-cli/assets"
 	"github.com/voocel/ainovel-cli/internal/bootstrap"
@@ -13,6 +14,7 @@ import (
 	"github.com/voocel/ainovel-cli/internal/entry/startup"
 	"github.com/voocel/ainovel-cli/internal/entry/tui"
 	"github.com/voocel/ainovel-cli/internal/eval"
+	"github.com/voocel/ainovel-cli/internal/provider/antigravity"
 	"github.com/voocel/ainovel-cli/internal/rules"
 	buildversion "github.com/voocel/ainovel-cli/internal/version"
 )
@@ -125,8 +127,51 @@ func runWithConfig(cfg bootstrap.Config, opts cliOptions, args []string) {
 	if opts.Prompt != "" || opts.PromptFile != "" {
 		die("error: --prompt/--prompt-file 仅能在 --headless 模式下使用")
 	}
+	checkAntigravityAuth(&cfg)
 	if err := tui.Run(cfg, bundle, versionInfo()); err != nil {
 		die("error: %v", err)
+	}
+}
+
+func checkAntigravityAuth(cfg *bootstrap.Config) {
+	if !stdinIsTerminal() {
+		return
+	}
+
+	usesAntigravity := cfg.Provider == "antigravity"
+	if !usesAntigravity {
+		for _, rc := range cfg.Roles {
+			if rc.Provider == "antigravity" {
+				usesAntigravity = true
+				break
+			}
+		}
+	}
+	if !usesAntigravity {
+		return
+	}
+
+	if antigravity.HasCredentials() {
+		return
+	}
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "未檢測到 Google Antigravity 授權憑證。")
+	fmt.Fprint(os.Stderr, "是否立即進行 Google OAuth 登入？[Y/n]（直接回車確認，輸入 n 跳過）: ")
+	var answer string
+	fmt.Fscanln(os.Stdin, &answer)
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	if answer == "" || answer == "y" || answer == "yes" {
+		fmt.Fprintln(os.Stderr)
+		code := runAntigravityLogin()
+		if code == 0 {
+			fmt.Fprintln(os.Stderr, "授權完成！正在進入主程式...")
+			time.Sleep(1 * time.Second)
+		} else {
+			fmt.Fprintln(os.Stderr, "登入未完成，後續可隨時在終端執行 `ainovel-cli auth login antigravity` 重新登入。")
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, "已略過登入。請記得在開始生成前執行 `ainovel-cli auth login antigravity`。")
 	}
 }
 

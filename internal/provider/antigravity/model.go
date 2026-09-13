@@ -42,17 +42,15 @@ type AntigravityModel struct {
 	stepCounter   atomic.Int64
 	lastEndpoint  string
 	endpointMu    sync.RWMutex
+	credsMu       sync.Mutex
 }
 
 // NewModel 建立 AntigravityModel 實例。
 func NewModel(modelName string, opts ModelOptions) (*AntigravityModel, error) {
 	creds := opts.Credentials
 	if creds == nil {
-		var err error
-		creds, err = LoadCredentials()
-		if err != nil {
-			return nil, fmt.Errorf("載入 Antigravity 憑證失敗: %w (請先執行 ainovel-cli auth login antigravity)", err)
-		}
+		// 嘗試載入憑證，若尚未登入則延遲到調用時再檢查
+		creds, _ = LoadCredentials()
 	}
 
 	profile := ResolveWireProfile(modelName)
@@ -137,14 +135,27 @@ func (m *AntigravityModel) Generate(ctx context.Context, messages []agentcore.Me
 func (m *AntigravityModel) GenerateStream(ctx context.Context, messages []agentcore.Message, tools []agentcore.ToolSpec, opts ...agentcore.CallOption) (<-chan agentcore.StreamEvent, error) {
 	out := make(chan agentcore.StreamEvent, 100)
 
+	// 確保憑證已載入
+	m.credsMu.Lock()
+	if m.creds == nil {
+		creds, err := LoadCredentials()
+		if err != nil {
+			m.credsMu.Unlock()
+			return nil, fmt.Errorf("未找到 Google Antigravity 授權憑證，請先在終端執行 `ainovel-cli auth login antigravity` 完成登入: %w", err)
+		}
+		m.creds = creds
+	}
+	creds := m.creds
+	m.credsMu.Unlock()
+
 	// 確保 Token 有效
-	token, err := EnsureValidToken(ctx, m.creds)
+	token, err := EnsureValidToken(ctx, creds)
 	if err != nil {
 		return nil, fmt.Errorf("antigravity token: %w", err)
 	}
 
 	// 確保已探測 ProjectID
-	projectID, err := DiscoverAndOnboardProject(ctx, m.creds, nil)
+	projectID, err := DiscoverAndOnboardProject(ctx, creds, nil)
 	if err != nil {
 		return nil, fmt.Errorf("antigravity project: %w", err)
 	}

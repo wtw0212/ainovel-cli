@@ -49,6 +49,20 @@ func DefaultAuthFilePath() string {
 	return filepath.Join(home, ".ainovel", "antigravity_auth.json")
 }
 
+// HasCredentials 檢查本地是否存在有效憑證檔案。
+func HasCredentials() bool {
+	path := DefaultAuthFilePath()
+	fi, err := os.Stat(path)
+	if err != nil || fi.IsDir() || fi.Size() == 0 {
+		return false
+	}
+	creds, err := LoadCredentials()
+	if err != nil {
+		return false
+	}
+	return creds.AccessToken != "" || creds.RefreshToken != ""
+}
+
 // LoadCredentials 從本地檔案讀取 Antigravity 憑證。
 func LoadCredentials() (*Credentials, error) {
 	path := DefaultAuthFilePath()
@@ -59,6 +73,9 @@ func LoadCredentials() (*Credentials, error) {
 	var creds Credentials
 	if err := json.Unmarshal(data, &creds); err != nil {
 		return nil, fmt.Errorf("unmarshal credentials: %w", err)
+	}
+	if creds.AccessToken == "" && creds.RefreshToken == "" {
+		return nil, fmt.Errorf("credentials file contains no tokens")
 	}
 	return &creds, nil
 }
