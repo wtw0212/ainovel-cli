@@ -322,6 +322,7 @@ func (m *AntigravityModel) readSSEStream(reader io.Reader, out chan<- agentcore.
 	var textBuilder strings.Builder
 	var thinkingBuilder strings.Builder
 	var toolCalls []agentcore.ToolCall
+	var lastThoughtSignature string
 	var stopReason agentcore.StopReason = agentcore.StopReasonStop
 	var usage *agentcore.Usage
 
@@ -362,6 +363,10 @@ func (m *AntigravityModel) readSSEStream(reader io.Reader, out chan<- agentcore.
 			}
 
 			for _, part := range cand.Content.Parts {
+				if part.ThoughtSignature != "" {
+					lastThoughtSignature = part.ThoughtSignature
+				}
+
 				if part.Thought {
 					thinkingBuilder.WriteString(part.Text)
 					out <- agentcore.StreamEvent{
@@ -378,10 +383,18 @@ func (m *AntigravityModel) readSSEStream(reader io.Reader, out chan<- agentcore.
 
 				if part.FunctionCall != nil {
 					argsBytes, _ := json.Marshal(part.FunctionCall.Args)
+					sig := part.ThoughtSignature
+					if sig == "" {
+						sig = lastThoughtSignature
+					}
+					if sig == "" {
+						sig = "skip_thought_signature_validator"
+					}
 					toolCalls = append(toolCalls, agentcore.ToolCall{
-						ID:   fmt.Sprintf("call_%s_%d", part.FunctionCall.Name, len(toolCalls)+1),
-						Name: part.FunctionCall.Name,
-						Args: argsBytes,
+						ID:               fmt.Sprintf("call_%s_%d", part.FunctionCall.Name, len(toolCalls)+1),
+						Name:             part.FunctionCall.Name,
+						Args:             argsBytes,
+						ThoughtSignature: sig,
 					})
 				}
 			}

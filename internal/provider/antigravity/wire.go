@@ -44,6 +44,24 @@ type Part struct {
 	FunctionResponse *FunctionResponse `json:"functionResponse,omitempty"`
 }
 
+// UnmarshalJSON 兼顧 Google CCA / Gemini 可能傳回的 camelCase 與 snake_case thought_signature。
+func (p *Part) UnmarshalJSON(data []byte) error {
+	type rawPart Part
+	var r struct {
+		rawPart
+		AltThoughtSignature string `json:"thought_signature,omitempty"`
+	}
+	if err := json.Unmarshal(data, &r); err != nil {
+		return err
+	}
+	*p = Part(r.rawPart)
+	if p.ThoughtSignature == "" && r.AltThoughtSignature != "" {
+		p.ThoughtSignature = r.AltThoughtSignature
+	}
+	return nil
+}
+
+
 // FunctionCall 描述模型觸發的工具調用。
 type FunctionCall struct {
 	Name string         `json:"name"`
@@ -216,13 +234,19 @@ func ConvertMessages(messages []agentcore.Message) (contents []Content, systemIn
 						if len(b.ToolCall.Args) > 0 {
 							_ = json.Unmarshal(b.ToolCall.Args, &argsMap)
 						}
+						sig := b.ToolCall.ThoughtSignature
+						if sig == "" {
+							sig = "skip_thought_signature_validator"
+						}
 						c.Parts = append(c.Parts, Part{
 							FunctionCall: &FunctionCall{
 								Name: b.ToolCall.Name,
 								Args: argsMap,
 							},
+							ThoughtSignature: sig,
 						})
 					}
+
 				}
 			}
 		case agentcore.RoleTool:

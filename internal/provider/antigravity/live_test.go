@@ -264,7 +264,50 @@ func TestLiveHelloEndToEndArchitect(t *testing.T) {
 	for i, tc := range doneMsg.ToolCalls() {
 		t.Logf("ToolCall[%d]: %s, args=%s", i, tc.Name, string(tc.Args))
 	}
+
+	// Step 3: Execute the tool and send turn 2 back to model!
+	t.Logf("Step 3: Running novel_context and sending turn 2 back to model...")
+	toolResult, err := architectTools[0].Execute(ctx, []byte("{}"))
+	if err != nil {
+		t.Fatalf("tool execute failed: %v", err)
+	}
+
+	toolMsg := agentcore.ToolResultMsg(doneMsg.ToolCalls()[0].ID, toolResult, false)
+	toolMsg.Metadata["tool_name"] = "novel_context"
+
+	msgs := []agentcore.Message{
+		agentcore.SystemMsg(bundle.Prompts.ArchitectLong),
+		agentcore.UserMsg(decision.Task),
+		*doneMsg,
+		toolMsg,
+	}
+
+
+	streamCh2, err := m.GenerateStream(ctx, msgs, specs)
+	if err != nil {
+		t.Fatalf("Turn 2 GenerateStream failed: %v", err)
+	}
+
+	var turn2Done *agentcore.Message
+	for ev := range streamCh2 {
+		if ev.Type == agentcore.StreamEventError {
+			t.Fatalf("Turn 2 Stream Error: %v", ev.Err)
+		}
+		if ev.Type == agentcore.StreamEventDone {
+			turn2Done = &ev.Message
+		}
+	}
+
+	if turn2Done == nil {
+		t.Fatalf("Turn 2 did not receive done message")
+	}
+	t.Logf("✓ Turn 2 successfully responded! StopReason=%s, ToolCalls=%d", turn2Done.StopReason, len(turn2Done.ToolCalls()))
+	for i, tc := range turn2Done.ToolCalls() {
+		t.Logf("Turn 2 ToolCall[%d]: %s", i, tc.Name)
+	}
 }
+
+
 
 
 
