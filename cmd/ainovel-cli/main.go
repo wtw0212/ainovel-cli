@@ -54,8 +54,8 @@ func main() {
 	}
 	headlessMode = opts.Headless
 
-	// 首次引导
-	if bootstrap.NeedsSetup() {
+	// 首次引导或显式指定 --setup
+	if bootstrap.NeedsSetup() || opts.Setup {
 		if opts.Headless {
 			die("error: headless 模式不支持首次引导，请先运行一次 TUI 完成配置")
 		}
@@ -176,6 +176,7 @@ func checkAntigravityAuth(cfg *bootstrap.Config) {
 }
 
 type cliOptions struct {
+	Setup         bool
 	Headless      bool
 	Prompt        string
 	PromptFile    string
@@ -190,6 +191,8 @@ func parseCLIOptions(argv []string) (cliOptions, []string, error) {
 	var args []string
 	for i := 0; i < len(argv); i++ {
 		switch argv[i] {
+		case "--setup", "setup":
+			opts.Setup = true
 		case "--version", "-v":
 			opts.Version = true
 		case "version":

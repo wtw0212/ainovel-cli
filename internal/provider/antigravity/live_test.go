@@ -2,11 +2,14 @@ package antigravity
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/voocel/agentcore"
 	"github.com/voocel/ainovel-cli/internal/llmcontract"
+	"github.com/voocel/ainovel-cli/internal/store"
+	"github.com/voocel/ainovel-cli/internal/tools"
 )
 
 func TestLiveCallWithArbiter(t *testing.T) {
@@ -81,5 +84,54 @@ func TestLiveLLMContractExecute(t *testing.T) {
 	t.Logf("✓ llmcontract.Execute 成功！Answer=%q, Reason=%q", result.Answer, result.Reason)
 	if result.Answer == "" || result.Reason == "" {
 		t.Errorf("結果欄位不可為空: %+v", result)
+	}
+}
+
+func TestLiveArchitectTools(t *testing.T) {
+	st := store.NewStore(t.TempDir())
+
+	architectTools := []agentcore.Tool{
+		tools.NewContextTool(st, tools.References{}, "default", tools.NewStyleStatsIndex(st)),
+		tools.NewSaveBookTool(st),
+		tools.NewSaveFoundationTool(st),
+		tools.NewReviseOutlineTool(st),
+		tools.NewResolveOutlineFeedbackTool(st),
+		tools.NewAuditFoundationTool(st),
+		tools.NewExpandNextArcTool(st),
+	}
+
+	var specs []agentcore.ToolSpec
+	for _, tool := range architectTools {
+		specs = append(specs, agentcore.ToolSpec{
+			Name:        tool.Name(),
+			Description: tool.Description(),
+			Parameters:  tool.Schema(),
+		})
+	}
+
+	converted := ConvertTools(specs)
+	b, _ := json.MarshalIndent(converted, "", "  ")
+	t.Logf("Converted tools:\n%s", string(b))
+
+	m, err := NewModel("gemini-3.8-flash", ModelOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	streamCh, err := m.GenerateStream(ctx, []agentcore.Message{
+		agentcore.SystemMsg("你是长篇小说规划师"),
+		agentcore.UserMsg("请构建一部作品的基础设定"),
+	}, specs)
+	if err != nil {
+		t.Fatalf("GenerateStream error: %v", err)
+	}
+
+	for ev := range streamCh {
+		if ev.Type == agentcore.StreamEventError {
+			t.Fatalf("Stream error: %v", ev.Err)
+		}
 	}
 }

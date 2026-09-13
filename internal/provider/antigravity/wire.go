@@ -284,10 +284,146 @@ func ConvertTools(specs []agentcore.ToolSpec) []Tool {
 		declarations = append(declarations, FunctionDeclaration{
 			Name:        s.Name,
 			Description: s.Description,
-			Parameters:  s.Parameters,
+			Parameters:  NormalizeSchemaForCCA(s.Parameters),
 		})
 	}
 	return []Tool{{FunctionDeclarations: declarations}}
+}
+
+// NormalizeSchemaForCCA 遞迴正規化 JSON Schema，使其相容 Google Cloud Code Assist (CCA) 與 Gemini Protobuf 規格：
+// 1. 將 type 陣列（如 ["string", "null"]）轉為純純量（如 "string"），避免 proto 反序列化報錯。
+// 2. 剔除 Google Protobuf Schema 不支援的欄位（$schema, additionalProperties, format, default, 驗證關鍵字等），但嚴格保留 properties 底下的參數名稱（如 title, format 等）。
+// 3. 確保 required 清單中的欄位皆在 properties 中定義。
+func NormalizeSchemaForCCA(v any) any {
+	return normalizeSchemaForCCAInternal(v, false)
+}
+
+func normalizeSchemaForCCAInternal(v any, isPropertiesMap bool) any {
+	if v == nil {
+		return nil
+	}
+
+	switch val := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(val))
+		for k, item := range val {
+			if isPropertiesMap {
+				// 這裡的 key 是工具參數名稱（如 "title", "format" 等），絕對不可過濾！
+				out[k] = normalizeSchemaForCCAInternal(item, false)
+				continue
+			}
+
+			// 這裡的 key 是 JSON Schema 關鍵字
+			switch k {
+			case "$schema", "$ref", "$defs", "definitions", "additionalProperties",
+				"propertyNames", "patternProperties", "unevaluatedProperties", "unevaluatedItems",
+				"prefixItems", "examples", "deprecated", "readOnly", "writeOnly", "$comment",
+				"format", "default", "minLength", "maxLength", "minimum", "maximum",
+				"exclusiveMinimum", "exclusiveMaximum", "multipleOf", "pattern", "nullable",
+				"title":
+				continue
+			}
+
+			if k == "properties" {
+				out[k] = normalizeSchemaForCCAInternal(item, true)
+			} else {
+				out[k] = normalizeSchemaForCCAInternal(item, false)
+			}
+		}
+
+		if !isPropertiesMap {
+			if typeVal, ok := out["type"]; ok {
+				switch tv := typeVal.(type) {
+				case []any:
+					var chosen string
+					for _, tItem := range tv {
+						if s, ok := tItem.(string); ok && s != "null" {
+							chosen = s
+							break
+						}
+					}
+					if chosen == "" && len(tv) > 0 {
+						if s, ok := tv[0].(string); ok {
+							chosen = s
+						}
+					}
+					if chosen == "" {
+						chosen = "string"
+					}
+					out["type"] = chosen
+				case []string:
+					var chosen string
+					for _, s := range tv {
+						if s != "null" {
+							chosen = s
+							break
+						}
+					}
+					if chosen == "" && len(tv) > 0 {
+						chosen = tv[0]
+					}
+					if chosen == "" {
+						chosen = "string"
+					}
+					out["type"] = chosen
+				}
+			}
+
+			if tStr, ok := out["type"].(string); ok && tStr == "object" {
+				if _, hasProps := out["properties"]; !hasProps {
+					out["properties"] = map[string]any{}
+				}
+			}
+
+			// 確保 required 清單中的欄位都在 properties 中存在
+			if reqVal, ok := out["required"]; ok {
+				propsMap, _ := out["properties"].(map[string]any)
+				var filteredReq []string
+				switch rv := reqVal.(type) {
+				case []any:
+					for _, rItem := range rv {
+						if s, ok := rItem.(string); ok {
+							if propsMap != nil {
+								if _, exists := propsMap[s]; exists {
+									filteredReq = append(filteredReq, s)
+								}
+							}
+						}
+					}
+					if len(filteredReq) > 0 {
+						out["required"] = filteredReq
+					} else {
+						delete(out, "required")
+					}
+				case []string:
+					for _, s := range rv {
+						if propsMap != nil {
+							if _, exists := propsMap[s]; exists {
+								filteredReq = append(filteredReq, s)
+							}
+						}
+					}
+					if len(filteredReq) > 0 {
+						out["required"] = filteredReq
+					} else {
+						delete(out, "required")
+					}
+				}
+			}
+		}
+
+		return out
+
+	case []any:
+		out := make([]any, len(val))
+		for i, item := range val {
+			out[i] = normalizeSchemaForCCAInternal(item, false)
+		}
+		return out
+
+	default:
+		return v
+	}
 }
 
 // StreamResponseChunk 是 SSE 返回的單個 JSON 塊。
